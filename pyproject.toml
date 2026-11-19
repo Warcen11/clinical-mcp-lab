@@ -1,0 +1,25 @@
+[build-system]
+requires = ["setuptools>=68"]
+build-backend = "setuptools.build_meta"
+
+[project]
+name = "clinical-mcp-lab"
+version = "0.1.0"
+description = "Student MCP transport laboratory: stdio, SSE and remote PubMed with Streamlit"
+requires-python = ">=3.11,<3.14"
+dependencies = [
+  "mcp>=2.3.0,<2.4",
+  "streamlit>=1.40,<2",
+  "pydantic>=2.8,<3",
+  "anyio>=4.4,<5",
+  "httpx>=0.27,<1",
+]
+
+[project.optional-dependencies]
+test = ["pytest>=8,<10", "pytest-asyncio>=0.24,<2"]
+
+[tool.setuptools.packages.find]
+include = ["clinical_mcp*"]
+
+[tool.pytest.ini_options]
+testpaths = ["tests"]
