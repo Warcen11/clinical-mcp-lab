@@ -16,7 +16,7 @@ from mcp.client.streamable_http import streamable_http_client
 from mcp.types import PaginatedRequestParams
 
 from clinical_mcp.client.tracing import PacketTrace, ReadTap, WriteTap
-from clinical_mcp.client.validation import coerce
+from clinical_mcp.client.validation import coerce, local_defaults
 
 ROOT = Path(__file__).resolve().parents[2]
 LOCAL_SSE_URL = "http://127.0.0.1:8000/sse"
@@ -31,7 +31,8 @@ SOURCES = {
 def local_direct_http_client(headers=None, timeout=None, auth=None):
     """Bypass HTTP(S)_PROXY only for loopback SSE, keeping remote proxy support.
 
-    MCP SDK 2.x calls this factory for GET /sse and subsequent POST /messages.
+    MCP SDK 2.x passes a httpx2.Timeout instance to this factory.
+    Returning httpx.AsyncClient (v1) would cause `float + Timeout` TypeError.
     """
     return httpx.AsyncClient(
         headers=headers, timeout=timeout, auth=auth, trust_env=False,
@@ -83,7 +84,9 @@ async def _execute(source: str, tool_name: str | None, args: dict | None) -> dic
             selected = next((t for t in tools if t["name"] == tool_name), None)
             if selected is None:
                 raise ValueError(f"Инструмент «{tool_name}» отсутствует в tools/list")
-            cleaned, warnings = coerce(selected.get("inputSchema", {}), args or {})
+            defaults = local_defaults(source, tool_name) or None
+            cleaned, warnings = coerce(selected.get("inputSchema", {}), args or {},
+                                       smart_defaults=defaults)
             response = await session.call_tool(tool_name, cleaned)
             data = response.model_dump(by_alias=True, mode="json", exclude_none=True)
         return {"tools": tools, "result": data, "trace": trace.events, "warnings": warnings}
@@ -97,7 +100,8 @@ def _connection_failure(exc: BaseException) -> bool:
                             anyio.ClosedResourceError, anyio.EndOfStream))
 
 
-async def execute_async(source: str, tool_name: str | None = None, args: dict | None = None) -> dict:
+async def execute_async(source: str, tool_name: str | None = None,
+                        args: dict | None = None) -> dict:
     attempts = 3 if source == "sse" else 1
     for attempt in range(attempts):
         try:
@@ -113,6 +117,7 @@ async def execute_async(source: str, tool_name: str | None = None, args: dict | 
     raise RuntimeError("Попытки подключения исчерпаны")
 
 
-def execute(source: str, tool_name: str | None = None, args: dict | None = None) -> dict:
+def execute(source: str, tool_name: str | None = None,
+            args: dict | None = None) -> dict:
     """Single UI-call boundary; each invocation owns a new complete async session."""
     return asyncio.run(execute_async(source, tool_name, args))

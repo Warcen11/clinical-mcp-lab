@@ -34,6 +34,18 @@ def test_real_sse_mcp_connection():
         assert not result["result"].get("isError")
         assert any(e["packet"].get("method") == "tools/call"
                    for e in result["trace"] if isinstance(e["packet"], dict))
+
+        # The two values satisfy their individual JSON Schema ranges, so the
+        # client sanitizer lets them reach the server. The clinical relation
+        # diastolic < systolic must be validated by the MCP tool itself.
+        bad = execute("sse", "cardio_map", {"systolic": 100, "diastolic": 120})
+        assert bad["result"] is not None
+        assert bad["result"].get("isError") is True, bad["result"]
+        assert any(e["packet"].get("method") == "tools/call"
+                   for e in bad["trace"] if isinstance(e["packet"], dict))
+        # A correct call still works after the server returns a ToolError.
+        recovered = execute("sse", "cardio_map", {"systolic": 120, "diastolic": 80})
+        assert not recovered["result"].get("isError"), recovered["result"]
     finally:
         process.terminate()
         process.wait(timeout=5)

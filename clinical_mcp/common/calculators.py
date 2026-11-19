@@ -61,8 +61,10 @@ def gcs(eye: int, verbal: int, motor: int) -> dict:
         label, risk = "Тяжёлое нарушение сознания по суммарной GCS", "high"
     elif total <= 12:
         label, risk = "Умеренное нарушение сознания по суммарной GCS", "warning"
+    elif total < 15:
+        label, risk = "GCS 13–14: высокий балл, но требуется оценка компонентов и клинического контекста", "low"
     else:
-        label, risk = "Лёгкое нарушение / сохранённое сознание по суммарной GCS", "low"
+        label, risk = "Максимальный балл по шкале Глазго (15 из 15)", "low"
     return _output(total, "баллов из 15", label, "gcs",
                    {"eye": eye, "verbal": verbal, "motor": motor}, risk,
                    ["Шкала GCS требует очного обследования; отдельные компоненты важнее одного итога."])

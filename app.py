@@ -8,7 +8,7 @@ import re
 import streamlit as st
 
 from clinical_mcp.client.router import SOURCES, REMOTE_URL, execute
-from clinical_mcp.client.validation import unwrap_schema
+from clinical_mcp.client.validation import unwrap_schema, local_defaults, display_default
 
 st.set_page_config(page_title="Clinical MCP Lab", page_icon="🩺", layout="wide")
 
@@ -23,32 +23,38 @@ def error_details(exc: BaseException) -> str:
         return f"{summary} — причина: {error_details(exc.__cause__)}"
     return summary
 
-def input_widget(name: str, meta: dict, required: bool, prefix: str):
+def input_widget(name: str, meta: dict, required: bool, prefix: str, default=None):
     real = unwrap_schema(meta)
     label = meta.get("title") or name.replace("_", " ")
     if required:
         label += " *"
     help_text = meta.get("description") or ""
     typ = real.get("type", "string")
+    placeholder = f"По умолчанию: {display_default(default)}" if default is not None else None
+    if default is not None and typ == "boolean":
+        help_text = (help_text + " · " if help_text else "") + placeholder
     widget_key = f"{prefix}:{name}"
     if "enum" in real:
         options = real["enum"]
         return st.selectbox(label, options=options, index=None,
-                            placeholder="Выберите значение", help=help_text, key=widget_key)
+                            placeholder=placeholder or "Выберите значение", help=help_text, key=widget_key)
     if typ == "boolean":
-        return st.checkbox(label, value=False, help=help_text, key=widget_key)
+        return st.checkbox(label, value=bool(default) if default is not None else False,
+                           help=help_text, key=widget_key)
     if typ in ("integer", "number"):
-        # None = no clinical input; never silently fabricate a patient measurement.
+        # Empty value keeps the advertised fallback visible as a placeholder.
         as_int = typ == "integer"
         step = 1 if as_int else 0.1
         kw = {"label": label, "value": None, "step": step,
-              "help": help_text or "Введите числовое значение", "key": widget_key}
+              "help": help_text or "Введите числовое значение", "key": widget_key,
+              "placeholder": placeholder}
         if "minimum" in real:
             kw["min_value"] = int(real["minimum"]) if as_int else float(real["minimum"])
         if "maximum" in real:
             kw["max_value"] = int(real["maximum"]) if as_int else float(real["maximum"])
         return st.number_input(**kw)
-    return st.text_input(label, value="", help=help_text, key=widget_key)
+    return st.text_input(label, value="", help=help_text,
+                         placeholder=placeholder, key=widget_key)
 
 
 def unwrap_result(raw: dict) -> dict:
@@ -243,14 +249,17 @@ with st.form(key=f"clinical-form:{source}:{chosen_name}", clear_on_submit=False)
     else:
         st.caption("Инструмент не требует аргументов.")
     arguments = {}
+    defaults = local_defaults(source, chosen_name)
     for name, meta in properties.items():
         if name in required:
-            arguments[name] = input_widget(name, meta, True, f"{source}:{chosen_name}")
+            arguments[name] = input_widget(name, meta, True, f"{source}:{chosen_name}",
+                                           default=defaults.get(name))
     optional = [(name, meta) for name, meta in properties.items() if name not in required]
     if optional:
         with st.expander(f"Дополнительные параметры ({len(optional)})", expanded=False):
             for name, meta in optional:
-                arguments[name] = input_widget(name, meta, False, f"{source}:{chosen_name}")
+                arguments[name] = input_widget(name, meta, False, f"{source}:{chosen_name}",
+                                               default=defaults.get(name))
     submitted = st.form_submit_button("Вызвать инструмент через MCP", type="primary")
 
 if submitted:

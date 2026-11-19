@@ -20,6 +20,9 @@ async def test_stdio_tool_list_and_call_over_real_mcp():
 
 
 @pytest.mark.asyncio
-async def test_invalid_data_returns_tool_error_not_crash():
+async def test_valid_gcs_over_real_stdio_mcp():
+    # This is a success-path integration test; it must not claim to test errors.
     data = await execute_async("stdio", "gcs", {"eye": 4, "verbal": 5, "motor": 6})
     assert not data["result"].get("isError")
+    assert any(e["packet"].get("method") == "tools/call"
+               for e in data["trace"] if isinstance(e["packet"], dict))

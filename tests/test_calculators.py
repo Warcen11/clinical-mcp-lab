@@ -14,6 +14,15 @@ def test_gcs():
     assert c.gcs(1, 1, 1)["value"] == 3
 
 
+def test_gcs_maximal_score_is_not_described_as_impairment():
+    result = c.gcs(4, 5, 6)
+    assert result["value"] == 15
+    assert "Максимальный балл" in result["interpretation"]
+    assert "нарушени" not in result["interpretation"].lower()
+    assert c.gcs(4, 4, 6)["value"] == 14
+    assert "13–14" in c.gcs(4, 4, 6)["interpretation"]
+
+
 def test_cockcroft_gault():
     assert c.creatinine_clearance(40, 70, 1.0, "male")["value"] == 97.2
     assert c.creatinine_clearance(40, 70, 1.0, "female")["value"] == 82.6
